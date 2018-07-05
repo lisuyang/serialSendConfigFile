@@ -21,6 +21,7 @@ BlockRead = False
 def checkPort(portList):
 	global CheckStatus
 	global comList
+	global BlockRead
 
 	CheckStatus = False
 	checkSerial = serial.Serial(port=portList, baudrate=9600)
@@ -34,10 +35,13 @@ def checkPort(portList):
 
 	BlockRead = True
 	checkSerial.cancel_read()
+
 	sleep(0.1)
+	print (readCheckThread.is_alive())
 	if readCheckThread.is_alive():
-		print ("readCheckThread is alive")
 		readCheckThread._delete()
+
+
 
 	checkSerial.close()
 	print ("checkSerial.close")
@@ -58,8 +62,11 @@ def readData(serial):
 
 			# if not serial.is_open:
 			# 	print (serial.name + " is not open")
+			# 	sleep(0.1)
 			# 	continue
 
+			if not serial.is_open:
+				print ("%s is not open" %serial.name)
 
 			readChar = serial.read(1)
 			RWThreadLock = False
@@ -74,8 +81,9 @@ def readData(serial):
 					ReadBuff = ""
 					CheckStatus = True
 					pass
-				if readStr == "successful\r\n":
+				if readStr == "successful\n":
 					print ("%s config successfully" %serial.name)
+					return
 
 				if readStr == "stopRead\r\n":
 					ReadBuff = ""
@@ -85,8 +93,9 @@ def readData(serial):
 				print (ReadBuff)
 				readStr = []
 
-			while BlockRead:
-				pass
+			if BlockRead:
+				print ("BlockRead have effect")
+				return
 
 	except TypeError as e:
 		pass
@@ -137,52 +146,48 @@ def writeData(serial):
 		writeStr = input()
 		result = sendData(writeStr,serial,True)
 
+try:
+	readThread = list()
+	writeThread = list()
+	port_list = list(serial.tools.list_ports.comports())
+	if len(port_list) == 0:
+		print ("The PC doesn't have any port")
+	else:
+		[checkPort(port_list[i].device) for i in range(0,len(port_list))]
+	for i in range(0,len(comList)):
+		print ("open %s port" % comList[i])
+		serial = serial.Serial(port=comList[i], baudrate=9600)
 
-readThread = list()
-writeThread = list()
-port_list = list(serial.tools.list_ports.comports())
-if len(port_list) == 0:
-	print ("The PC doesn't have any port")
-else:
-	[checkPort(port_list[i].device) for i in range(0,len(port_list))]
-for i in range(0,len(comList)):
-	print ("open %s port" % comList[i])
-	serial = serial.Serial(port=comList[i], baudrate=9600)
+		readDataThreadName = 'readDataThread' + comList[i]
+		# writeDataThreadName = 'writeDataThread' + comList[i]
+		print (readDataThreadName)
+		# print (writeDataThreadName)
+		readThread = threading.Thread(target=readData, name=readDataThreadName, args=(serial,))
+		# writeThread = threading.Thread(target=writeData, name=writeDataThreadName, args=(serial,))
 
-	readDataThreadName = 'readDataThread' + comList[i]
-	# writeDataThreadName = 'writeDataThread' + comList[i]
-	print (readDataThreadName)
-	# print (writeDataThreadName)
-	readThread = threading.Thread(target=readData, name=readDataThreadName, args=(serial,))
-	# writeThread = threading.Thread(target=writeData, name=writeDataThreadName, args=(serial,))
+		readThread.start()
+		# writeThread.start()
+		# readThread.join()
+		# writeThread.join()
 
-	readThread.start()
-	# writeThread.start()
-	# readThread.join()
-	# writeThread.join()
+		sendFile(serial)
 
-	sendFile(serial)
+		readThread.join()
 
-	BlockRead = True
-	serial.cancel_read()
-	sleep(0.1)
-	if readThread.is_alive():
-		print ("readThread is alive")
-		readThread._delete()
+		serial.close()
 
+	print ("all threads have over!")
+
+	#for char in cmd1.encode():
+	#	s.write (chr(char).encode())
+
+	# except BaseException as e:
+	# 	# print ("BaseException")
+	# 	pass
+		# for i in range(0, len(comList)):
+		# 	serial[i].close()
+		# 	print ("%s com port" %comList[i])
+
+finally:
 	serial.close()
-
-print ("all threads have over!")
-
-#for char in cmd1.encode():
-#	s.write (chr(char).encode())
-
-# except BaseException as e:
-# 	# print ("BaseException")
-# 	pass
-	# for i in range(0, len(comList)):
-	# 	serial[i].close()
-	# 	print ("%s com port" %comList[i])
-
-
-input("Press <enter>")
+	input("Press <enter>")
