@@ -17,6 +17,7 @@ from serial.serialutil import portNotOpenError
 CheckStatus = 'none'
 ReadBuff = ""
 comList = []
+BlockRead = False
 def checkPort(portList):
 	global CheckStatus
 	global comList
@@ -31,10 +32,12 @@ def checkPort(portList):
 		comList.append(portList)
 		print ("This port is MCU port")
 
-
-	checkSerial.cancel_write()
+	BlockRead = True
 	checkSerial.cancel_read()
-	readCheckThread._delete()
+	sleep(0.1)
+	if readCheckThread.is_alive():
+		print ("readCheckThread is alive")
+		readCheckThread._delete()
 
 	checkSerial.close()
 	print ("checkSerial.close")
@@ -46,10 +49,18 @@ def readData(serial):
 	readStr = []
 	global RWThreadLock
 	global CheckStatus
+	global BlockRead
 	global ReadBuff
 	print ("Serial is reading...")
 	try:
+		BlockRead = False
 		while True:
+
+			# if not serial.is_open:
+			# 	print (serial.name + " is not open")
+			# 	continue
+
+
 			readChar = serial.read(1)
 			RWThreadLock = False
 			readStr.append(readChar.decode("utf-8"))
@@ -60,19 +71,30 @@ def readData(serial):
 				if readStr == "clear\r\n" or len(ReadBuff) > 1000:
 					ReadBuff = ""
 				if readStr =="123over\r\n":
+					ReadBuff = ""
 					CheckStatus = True
 					pass
 				if readStr == "successful\r\n":
 					print ("%s config successfully" %serial.name)
 
+				if readStr == "stopRead\r\n":
+					ReadBuff = ""
+					return
+
 				print (readStr)
 				print (ReadBuff)
 				readStr = []
-	except AttributeError as e:
-		pass
+
+			while BlockRead:
+				pass
+
 	except TypeError as e:
 		pass
+	except AttributeError as e:
+		pass
 
+	finally:
+		pass
 
 def sendData(indata,serial,anotherLine):
 	global RWThreadLock
@@ -88,7 +110,7 @@ def sendData(indata,serial,anotherLine):
 			# print ("timeoutCnt:%d"  %timeoutCnt)
 			timeoutCnt += 1
 			if timeoutCnt > 1000:
-				CheckStatus = False
+				CheckStatus= False
 				print ("This port can't receive data!")
 				return False
 			sleep(0.001)
@@ -96,7 +118,7 @@ def sendData(indata,serial,anotherLine):
 
 def sendFile(serial):
 	try:
-		ConfigFile = open("range.py",'r')
+		ConfigFile = open("Config.ini",'r')
 		FileInformation = ConfigFile.readlines()
 		for information in FileInformation:
 			sendData(information,serial,False)
@@ -139,11 +161,14 @@ for i in range(0,len(comList)):
 	# readThread.join()
 	# writeThread.join()
 
-	# sendFile(serial)
-	# sendData("sadf\r\n",serial,False)
-	serial.cancel_write()
+	sendFile(serial)
+
+	BlockRead = True
 	serial.cancel_read()
-	readThread._delete()
+	sleep(0.1)
+	if readThread.is_alive():
+		print ("readThread is alive")
+		readThread._delete()
 
 	serial.close()
 
@@ -158,3 +183,6 @@ print ("all threads have over!")
 	# for i in range(0, len(comList)):
 	# 	serial[i].close()
 	# 	print ("%s com port" %comList[i])
+
+
+input("Press <enter>")
